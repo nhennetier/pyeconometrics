@@ -65,20 +65,23 @@ class BaseModel():
 
     
 class FixedEffectPanelLogit(BaseModel):
-    def response_function(self, X, params):
-        X.drop(self.output, axis=1, inplace=True)
+    def response_function(self, X, beta):
+        try:
+            X.drop(self.output, axis=1, inplace=True)
+        except:
+            pass
         
         Z = 0
         for i,var in enumerate(self.variables):
-            Z += params[i] * X[var]
+            Z += beta[i] * X[var]
 
         return Z.rename('response')
         
-    def log_likelihood_student(self, X, y, params):
+    def log_likelihood_student(self, X, y, beta):
         X.reset_index(drop=True,inplace=True)
         y.reset_index(drop=True,inplace=True)
 
-        Z = np.array(self.response_function(X, params))
+        Z = np.array(self.response_function(X, beta))
 
         if nCr(len(y),sum(y)) <= 100:
             perms = unique_permutations(y)
@@ -92,14 +95,14 @@ class FixedEffectPanelLogit(BaseModel):
         result = Z.dot(np.array(y)) - log(sum(result))
         return result
             
-    def log_likelihood(self, X, params):
+    def log_likelihood(self, X, beta):
         result = sum(np.array(X.apply(lambda group : \
             self.log_likelihood_student(group,
-            group[self.output], params))))
+            group[self.output], beta))))
 
         return result
         
-    def conditional_probability(self, X, y, params):
+    def conditional_probability(self, X, y, beta):
         if nCr(len(y),sum(y)) <= 100:
             perms = unique_permutations(y)
         else:
@@ -107,14 +110,14 @@ class FixedEffectPanelLogit(BaseModel):
 
         result = []
         for z in perms:
-            result.append(exp(np.array(z).T.dot(np.array(X).dot(params))))
+            result.append(exp(np.array(z).T.dot(np.array(X).dot(beta))))
 
         result = np.sum(np.array(result), axis=0)
-        result = exp(np.array(y).T.dot(np.array(X).dot(params))) / result
+        result = exp(np.array(y).T.dot(np.array(X).dot(beta))) / result
 
         return result
     
-    def score_student(self, X, y, params):
+    def score_student(self, X, y, beta):
         X.drop(self.output, axis=1, inplace=True)
 
         X.reset_index(drop=True,inplace=True)
@@ -132,14 +135,19 @@ class FixedEffectPanelLogit(BaseModel):
             result = []
             for z in perms:
                 result.append(np.array(z) \
-                    * self.conditional_probability(X,z,params))
+                    * self.conditional_probability(X,z,beta))
 
             result = np.sum(np.array(result), axis=0)
             result = np.array(X).T.dot(np.array(y) - result)
 
             return result
+
+    def score(self, X, beta):
+        return sum(np.array(X.apply(lambda group : \
+            self.score_student(group, group[self.output],
+            beta))))
             
-    def hessian_student(self, X, y, params):
+    def hessian_student(self, X, y, beta):
         X.drop(self.output, axis=1, inplace=True)
 
         X.reset_index(drop=True,inplace=True)
@@ -160,7 +168,7 @@ class FixedEffectPanelLogit(BaseModel):
             result = []
             i = 0
             for z in perms:
-                probas.append(self.conditional_probability(X,z,params))
+                probas.append(self.conditional_probability(X,z,beta))
                 esp.append(np.array(z) * probas[i])
                 result.append(np.array(z).dot(np.array(z).T) * probas[i])
                 i += 1
@@ -170,7 +178,12 @@ class FixedEffectPanelLogit(BaseModel):
             result = np.array(X).T.dot(
                 result - esp.T.dot(esp)).dot(np.array(X))
 
-            return result
+            return -result
+
+    def hessian(self, X, beta):
+        return sum(np.array(X.apply(lambda group : \
+            self.hessian_student(group,group[self.output],
+            beta))))
 
     def fit(self, X, output, nb_iter=50):
         self.output = output
@@ -179,44 +192,50 @@ class FixedEffectPanelLogit(BaseModel):
         self.nb_obs = len(X)
         self.variables = [x for x in X.columns if x!=self.output]
         
-        params_init = [0 for _ in range(len(self.variables))]   
-        self.params_est = np.zeros((nb_iter,len(params_init)))
-        self.params_est[0] = params_init
+        beta_init = [0 for _ in range(len(self.variables))]   
+        self.beta_est = np.zeros((nb_iter,len(beta_init)))
+        self.beta_est[0] = beta_init
 
         X = X.groupby(level=0)
 
-        self.init_ll = self.log_likelihood(X, params_init)
+        self.init_ll = self.log_likelihood(X, beta_init)
         print('Initial log-likelihood : '+ str(self.init_ll))
         print('Parameters estimation in progress.')
         
         j = 1
         while (j < nb_iter) and (j == 1 \
-                or self.log_likelihood(X, self.params_est[j-1]) \
-                - self.log_likelihood(X, self.params_est[j-2]) \
+                or self.log_likelihood(X, self.beta_est[j-1]) \
+                - self.log_likelihood(X, self.beta_est[j-2]) \
                 > 0.01):
             
+            score = self.score(X, self.beta_est[j-1])
 
-            score = sum(np.array(X.apply(lambda group : \
-                self.score_student(group, group[self.output],
-                self.params_est[j-1]))))
-
-            hessian = sum(np.array(X.apply(lambda group : \
-                self.hessian_student(group,group[self.output],
-                self.params_est[j-1]))))
+            hessian = self.hessian(X, self.beta_est[j-1])
 
             try:
-                self.params_est[j] = self.params_est[j-1] \
-                    + inv(hessian).dot(score)                
+                self.beta_est[j] = self.beta_est[j-1] \
+                    - inv(hessian).dot(score)                
                 print('Iteration %s, log_likelihood : %s'\
-                    % (j, self.log_likelihood(X, self.params_est[j])))
+                    % (j, self.log_likelihood(X, self.beta_est[j])))
                 j += 1
 
             except:
                 raise ValueError('Improper classification problem' \
                     + ', should be 2 different labels')
 
-        self.params = self.params_est[j-2]
-        self.final_ll = self.log_likelihood(X, self.params)
+        self.beta = self.beta_est[j-2]
+        self.beta_est = self.beta_est[:j-1,:]
+
+        sqrt_vec = np.vectorize(sqrt)
+        hessian = self.hessian(X, self.beta_est[j-2])
+        self.beta_se = sqrt_vec(-inv(hessian).diagonal())
+
+        self.confidence_interval = np.array(
+                [[self.beta[i] - st.norm.ppf(0.975) * self.beta_se[i],
+                    self.beta[i] + st.norm.ppf(0.975) * self.beta_se[i]]
+                    for i in range(len(self.beta))])
+
+        self.final_ll = self.log_likelihood(X, self.beta)
 
         if j < nb_iter:
             self.converged = True
@@ -227,57 +246,46 @@ class FixedEffectPanelLogit(BaseModel):
         
     def predict(self, X):
         try :
-            self.params
+            self.beta
         except:
             raise AttributeError('Fit method should be called before evaluating of the model')
 
-        Z = self.response_function(X, self.params)
+        X = self.input_data_preparation(X)
+
+        Z = self.response_function(X, self.beta)
         result = (np.sign(Z)+1)/2
 
         return result.astype(int).rename('predicted_values')
         
     def predict_proba(self, X):
         try :
-            self.params
+            self.beta
         except:
             raise AttributeError('Fit method should be called before evaluating of the model')
 
-        Z = self.response_function(X,self.params)
+        X = self.input_data_preparation(X)
+
+        Z = self.response_function(X,self.beta)
         return Z.apply(lambda x : norm_cdf(x))
         
-    def __beta(self):
-        try:
-            return self.params
-        except:
-            raise AttributeError('Fit method should be called before evaluating the model')
-            
-    def __beta_std(self):
-        try:
-            return self.params
-        except:
-            raise AttributeError('Fit method should be called before evaluating the model')
-            
     def plot_trace_estimators(self):
         try:
-            self.params
+            self.beta
         except:
             raise AttributeError('Fit method should be called before evaluating of the model')
             
         colors = ['b','g','r','c','m','y','k']
-        for k in range(len(self.params)):
-            plt.plot(np.arange(1, len(self.params_est)+1),
-                     self.params_est[:,k],
+        for k in range(len(self.beta)):
+            plt.plot(np.arange(1, len(self.beta_est)+1),
+                     self.beta_est[:,k],
                      color=colors[(k-1) % len(colors)],
                      label="Beta_%s" % k)
 
-        plt.xlim((1,len(self.params_est)*1.2))
+        plt.xlim((1,len(self.beta_est)*1.2))
         plt.xlabel('Iterations')
         plt.ylabel('Estimators')
         plt.title('Trace plot of estimators of beta', size=16)
         plt.legend(loc='best')
         plt.show()
-
-    
-
 
         
