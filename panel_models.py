@@ -1,13 +1,55 @@
 # -*- coding: utf-8 -*-
+"""
+Created on Fri Jun 17 15:13:54 2016
+
+@author: Nicolas
+"""
+
 import numpy as np
-import scipy.stats as st
-import matplotlib.pyplot as plt
-
 from numpy.linalg import inv
-from math import exp, sqrt, log
-
+import scipy.stats as st
+from math import exp, sqrt, log, factorial
+import matplotlib.pyplot as plt
     
-  
+def norm_cdf(x):
+    a1 =  0.254829592
+    a2 = -0.284496736
+    a3 =  1.421413741
+    a4 = -1.453152027
+    a5 =  1.061405429
+    p  =  0.3275911
+    sign = 1
+    if x < 0:
+        sign = -1
+    x = abs(x)/sqrt(2.0)
+    t = 1.0/(1.0 + p*x)
+    y = 1.0 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*exp(-x*x)
+    return 0.5*(1.0 + sign*y)
+    
+def unique_permutations(seq):
+    i_indices = range(len(seq)-1, -1, -1)
+    k_indices = i_indices[1:]
+    seq = sorted(seq)
+    while True:
+        yield seq
+        for k in k_indices:
+            if seq[k] < seq[k+1]:
+                break
+        else:
+            return
+        k_val = seq[k]
+        for i in i_indices:
+            if k_val < seq[i]:
+                break
+        (seq[k], seq[i]) = (seq[i], seq[k])
+        seq[k+1:] = seq[-1:k:-1]
+
+def nCr(n,r):
+    try:
+        return factorial(n) / factorial(r) / factorial(n-r)
+    except:
+        return 101
+    
 
 class BaseModel():
     def input_data_preparation(self, X):
@@ -146,10 +188,6 @@ class FixedEffectPanelLogit(BaseModel):
     def fit(self, X, output, nb_iter=50):
         self.output = output
         X = self.input_data_preparation(X)
-
-        labels = list(np.unique(X[self.output]))
-        if labels != [0,1]:
-            raise ValueError("Labels must be in the unit interval.")
         
         self.nb_obs = len(X)
         self.variables = [x for x in X.columns if x!=self.output]
@@ -217,7 +255,7 @@ class FixedEffectPanelLogit(BaseModel):
         Z = self.response_function(X, self.beta)
         result = (np.sign(Z)+1)/2
 
-        return result.astype(int).rename('predicted_label')
+        return result.astype(int).rename('predicted_values')
         
     def predict_proba(self, X):
         try :
