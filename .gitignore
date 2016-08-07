@@ -1,2 +1,8 @@
 # Cache files
 *.pyc
+
+/build
+/dist
+/panel_econometrics.egg-info
+
+test.sh
