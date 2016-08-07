@@ -21,3 +21,5 @@ FE.summary()
 test.dropna(inplace=True)
 y_pred = FE.predict(test[['grant', 'employ', 'sales']])
 print('Accuracy score: %s' % accuracy_score(test['hrsemp'], y_pred))
+
+FE.plot_trace_estimators()
