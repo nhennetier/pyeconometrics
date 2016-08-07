@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='panel_econometrics',
-    version='0.1',
+    version='1.0.1',
     description='Econometrics for Panel Data',
     long_description=open('README.md').read(),
     author='Nicolas HENNETIER',
