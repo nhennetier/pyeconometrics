@@ -5,7 +5,7 @@ Python package to build econometrics models with panel data, using statsmodels o
 Available models
 ----------------
 
-	- Fixed Effects Logistic Regression
+- Fixed Effects Logistic Regression
 
 
 Installing from Source
