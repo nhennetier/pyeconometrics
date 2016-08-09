@@ -5,7 +5,8 @@ Python package to build econometrics models with panel data, using statsmodels o
 Available models
 ----------------
 
-- Fixed Effects Logistic Regression
+- Fixed Effects Logistic Regression (Logit)
+- Random Effects Logistic Regression (Logit and Probit)
 
 
 Installing from Source
@@ -21,5 +22,4 @@ Or clone the bleeding edge code from our repository on github at
 
 In the panel_econometrics directory do (with proper permissions)
 
-    python setup.py build
     python setup.py install
