@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import scipy.stats as st
+import scipy.integrate as spint
 import matplotlib.pyplot as plt
 
 import warnings
@@ -41,72 +42,6 @@ class BaseModel():
 
         return X
 
-    def fit(self, X, output, nb_iter=20, drop_na=True, fill_value=None, verbose=False):
-        self.output = output
-        X = self.input_data_preparation(X, drop_na, fill_value)
-
-        labels = list(np.unique(X[self.output]))
-        if labels != [0,1]:
-            raise ValueError("Labels must be in the unit interval.")
-        
-        self.nb_obs = len(X)
-        self.variables = [x for x in X.columns if x!=self.output]
-        
-        beta_init = [0 for _ in range(len(self.variables))]   
-        self.beta_est = np.zeros((nb_iter,len(beta_init)))
-        self.beta_est[0] = beta_init
-
-        X = X.groupby(level=0)
-
-        self.init_ll = self.log_likelihood(X, beta_init)
-
-        if verbose:
-            print('Initial log-likelihood : '+ str(self.init_ll))
-            print('Parameters estimation in progress.')
-        
-        j = 1
-        while (j < nb_iter) and (j == 1 \
-                or self.log_likelihood(X, self.beta_est[j-1]) \
-                - self.log_likelihood(X, self.beta_est[j-2]) \
-                > 0.01):
-            
-            score = self.score(X, self.beta_est[j-1])
-
-            hessian = self.hessian(X, self.beta_est[j-1])
-
-            try:
-                self.beta_est[j] = self.beta_est[j-1] \
-                    - inv(hessian).dot(score)
-                if verbose:              
-                    print('Iteration %s, log_likelihood : %s'\
-                        % (j, self.log_likelihood(X, self.beta_est[j])))
-                j += 1
-
-            except:
-                raise ValueError('Improper classification problem' \
-                    + ', should be 2 different labels')
-
-        self.beta = self.beta_est[j-2]
-        self.beta_est = self.beta_est[:j-1,:]
-
-        sqrt_vec = np.vectorize(sqrt)
-        hessian = self.hessian(X, self.beta_est[j-2])
-        self.beta_se = sqrt_vec(-inv(hessian).diagonal())
-
-        self.confidence_interval = np.array(
-                [[self.beta[i] - st.norm.ppf(0.975) * self.beta_se[i],
-                    self.beta[i] + st.norm.ppf(0.975) * self.beta_se[i]]
-                    for i in range(len(self.beta))])
-
-        self.final_ll = self.log_likelihood(X, self.beta)
-
-        if j < nb_iter:
-            self.converged = True
-        else:
-            self.converged = False
-
-        return self
-        
     def plot_trace_estimators(self):
         try:
             self.beta
@@ -284,9 +219,8 @@ class FixedEffectPanelLogit(BaseModel):
             return result
 
     def score(self, X, beta):
-        return sum(np.array(X.apply(lambda group : \
-            self.score_obs(group, group[self.output],
-            beta))))
+        return np.sum(np.array(X.apply(lambda group : \
+            self.score_obs(group, group[self.output], beta))), axis=0)
             
     def hessian_obs(self, X, y, beta):
         X.drop(self.output, axis=1, inplace=True)
@@ -322,8 +256,264 @@ class FixedEffectPanelLogit(BaseModel):
             return -result
 
     def hessian(self, X, beta):
-        return sum(np.array(X.apply(lambda group : \
-            self.hessian_obs(group,group[self.output],
-            beta))))
+        return np.sum(np.array(X.apply(lambda group : \
+            self.hessian_obs(group,group[self.output], beta))), axis=0)
+
+    def fit(self, X, output, nb_iter=20, drop_na=True, fill_value=None, verbose=False):
+        self.output = output
+        X = self.input_data_preparation(X.copy(), drop_na, fill_value)
+
+        labels = list(np.unique(X[self.output]))
+        if labels != [0,1]:
+            raise ValueError("Labels must be in the unit interval.")
+        
+        self.nb_obs = len(X)
+        self.variables = [x for x in X.columns if x!=self.output]
+        
+        beta_init = [0 for _ in range(len(self.variables))]   
+        self.beta_est = np.zeros((nb_iter,len(beta_init)))
+        self.beta_est[0] = beta_init
+
+        X = X.groupby(level=0)
+
+        self.init_ll = self.log_likelihood(X, beta_init)
+
+        if verbose:
+            print('Initial log-likelihood : '+ str(self.init_ll))
+            print('Parameters estimation in progress.')
+        
+        j = 1
+        while (j < nb_iter) and (j == 1 \
+                or self.log_likelihood(X, self.beta_est[j-1]) \
+                - self.log_likelihood(X, self.beta_est[j-2]) \
+                > 0.01):
+            
+            score = self.score(X, self.beta_est[j-1])
+
+            hessian = self.hessian(X, self.beta_est[j-1])
+
+            try:
+                self.beta_est[j] = self.beta_est[j-1] \
+                    - inv(hessian).dot(score)
+                if verbose:              
+                    print('Iteration %s, log_likelihood : %s'\
+                        % (j, self.log_likelihood(X, self.beta_est[j])))
+                j += 1
+
+            except:
+                raise ValueError('Improper classification problem' \
+                    + ', should be 2 different labels')
+
+        self.beta = self.beta_est[j-2]
+        self.beta_est = self.beta_est[:j-1,:]
+
+        sqrt_vec = np.vectorize(sqrt)
+        hessian = self.hessian(X, self.beta_est[j-2])
+        self.beta_se = sqrt_vec(-inv(hessian).diagonal())
+
+        self.confidence_interval = np.array(
+                [[self.beta[i] - st.norm.ppf(0.975) * self.beta_se[i],
+                    self.beta[i] + st.norm.ppf(0.975) * self.beta_se[i]]
+                    for i in range(len(self.beta))])
+
+        self.final_ll = self.log_likelihood(X, self.beta)
+
+        if j < nb_iter:
+            self.converged = True
+        else:
+            self.converged = False
+
+        return self
+        
+    
+
+
+
+
+
+class RandomEffectsPanelModel(BaseModel):
+    def __init__(self, residual_dist):
+        self.name = 'Panel Random Effects Model'
+        self.residual_dist = residual_dist
+
+    def response_function(self, X, beta, mu):
+        try:
+            X.drop(self.output, axis=1, inplace=True)
+        except:
+            pass
+        
+        Z = mu
+        for i,var in enumerate(self.variables):
+            Z += beta[i] * X[var]
+
+        return Z.rename('response')
+
+    def calculus_tools(self, X, w, beta, mu, sigma):
+        z = np.repeat(np.array([[1, w]]), X.shape[0], axis=0)
+        z = np.concatenate((z, X), axis=1).T
+
+        gamma = np.repeat(np.array([[mu, sigma]]), X.shape[0], axis=0)
+        beta = np.array(beta, ndmin=2)
+        beta = np.repeat(beta, X.shape[0], axis=0)
+        gamma = np.concatenate((gamma, beta), axis=1).T
+
+        return z, gamma
+
+    def conditional_density_obs(self, X, w, y, beta, mu, sigma):
+        z, gamma = self.calculus_tools(X, w, beta, mu, sigma)
+        
+        num = np.exp(np.multiply(np.array(y), z.T.dot(gamma)[:,0]))
+        denom = 1 + np.exp(z.T.dot(gamma))
+        
+        result = np.prod(np.divide(num, denom))
+
+        return result
+
+    def grad_conditional_density_obs(self, X, w, y, beta, mu, sigma):
+        z, gamma = self.calculus_tools(X, w, beta, mu, sigma)
+
+        item1 = np.exp(np.multiply(y, z.T.dot(gamma)[:,0]))
+        item2 = np.exp(z.T.dot(gamma)[:,0])
+
+        term1 = np.multiply(y, np.multiply(item1, 1+item2))
+        term2 = np.multiply(item1, item2)
+        denom = np.multiply(1+item2, 1+item2)
+
+        result = np.divide(term1 - term2, denom)
+        result = np.prod(result)
+        result = np.multiply(result, np.prod(z, axis=1))
+
+        return result
+        
+    def log_likelihood_obs(self, X, y, beta, mu, sigma):
+        X.reset_index(drop=True,inplace=True)
+        y.reset_index(drop=True,inplace=True)
+        try:
+            X.drop(self.output, axis=1, inplace=True)
+        except:
+            pass
+
+        if self.residual_dist == 'probit':
+            result = spint.quad(lambda w : self.conditional_density_obs(X, w, y, beta, mu, sigma) \
+                * st.norm(0,1).pdf(w), -3*sigma, 3*sigma)[0]
+        elif self.residual_dist == 'logit':
+            result = spint.quad(lambda w : self.conditional_density_obs(X, w, y, beta, mu, sigma) \
+                * st.logistic(0,1).pdf(w), -3*sigma, 3*sigma)[0]
+        else:
+            raise ValueError('Unknown value for argument residual_dist')
+        print(X, y, beta, mu, sigma)
+        return log(result)
+        
+            
+    def log_likelihood(self, X, beta, mu, sigma):
+        result = np.sum(np.array(X.apply(lambda group : \
+            self.log_likelihood_obs(group, group[self.output], beta, mu, sigma))), axis=0)
+
+        return result
+        
+    def score_obs(self, X, y, beta, mu, sigma):
+        X.reset_index(drop=True,inplace=True)
+        y.reset_index(drop=True,inplace=True)
+        X.drop(self.output, axis=1, inplace=True)
+        
+        if self.residual_dist == 'probit':
+            result = np.array([spint.quad(lambda w : self.grad_conditional_density_obs(X, w, y, beta, mu, sigma)[i] \
+                * st.norm(0,1).pdf(w), -3*sigma, 3*sigma)[0] for i in range(len(beta)+2)])
+        elif self.residual_dist == 'logit':
+            result = np.array([spint.quad(lambda w : self.grad_conditional_density_obs(X, w, y, beta, mu, sigma)[i] \
+                * st.logistic(0,1).pdf(w), -3*sigma, 3*sigma)[0] for i in range(len(beta)+2)])
+        else:
+            raise ValueError('Unknown value for argument residual_dist')
+
+        result = result / exp(self.log_likelihood_obs(X, y, beta, mu, sigma))
+
+        return result
+
+    def score(self, X, beta, mu, sigma):
+        return np.sum(np.array(X.apply(lambda group : \
+            self.score_obs(group, group[self.output], beta, mu, sigma))), axis=0)
+            
+    def hessian(self, X, beta, mu, sigma):
+        score_obs = np.array(X.apply(lambda group : \
+            np.array(self.score_obs(group, group[self.output], beta, mu, sigma), ndmin=2))).T
+        score = np.array(self.score(X, beta, mu, sigma), ndmin=2).T
+        
+        result = score_obs.dot(score_obs.T) - score.dot(score.T) / len(X)
+        
+        return result
+
+    def fit(self, X, output, nb_iter=20, drop_na=True, fill_value=None, verbose=False):
+        self.output = output
+        X = self.input_data_preparation(X.copy(), drop_na, fill_value)
+
+        labels = list(np.unique(X[self.output]))
+        if labels != [0,1]:
+            raise ValueError("Labels must be in the unit interval.")
+        
+        self.nb_obs = len(X)
+        self.variables = [x for x in X.columns if x!=self.output]
+        
+        beta_init = [0 for _ in range(len(self.variables))] + [0, 1]   
+        self.beta_est = np.zeros((nb_iter,len(beta_init)))
+        self.beta_est[0] = beta_init
+
+        X = X.groupby(level=0)
+
+        self.init_ll = self.log_likelihood(X, beta_init[:len(self.variables)], 0, 1)
+
+        if verbose:
+            print('Initial log-likelihood : '+ str(self.init_ll))
+            print('Parameters estimation in progress.')
+        
+        j = 1
+        while (j < nb_iter) and (j == 1 \
+                or self.log_likelihood(X, self.beta_est[j-1,:len(self.variables)],
+                    self.beta_est[j-1,-2], self.beta_est[j-1,-1]) \
+                - self.log_likelihood(X, self.beta_est[j-2,:len(self.variables)],
+                    self.beta_est[j-2,-2], self.beta_est[j-2,-1]) \
+                > 0.01):
+            
+            score = self.score(X, self.beta_est[j-1,:len(self.variables)],
+                self.beta_est[j-1,-2], self.beta_est[j-1,-1])
+
+            hessian = self.hessian(X, self.beta_est[j-1,:len(self.variables)],
+                self.beta_est[j-1,-2], self.beta_est[j-1,-1])
+
+            try:
+                self.beta_est[j] = self.beta_est[j-1] \
+                    - inv(hessian).dot(score)
+                if verbose:              
+                    print('Iteration %s, log_likelihood : %s'\
+                        % (j, self.log_likelihood(X, self.beta_est[j,:len(self.variables)],
+                            self.beta_est[j,-2], self.beta_est[j,-1])))
+                j += 1
+
+            except:
+                raise ValueError('Improper classification problem' \
+                    + ', should be 2 different labels')
+
+        self.beta = self.beta_est[j-2,:len(self.variables)]
+        self.mu = self.beta_est[j-2,-2]
+        self.sigma = self.beta_est[j-2,-1]
+        self.beta_est = self.beta_est[:j-1,:len(self.variables)]
+
+        sqrt_vec = np.vectorize(sqrt)
+        hessian = self.hessian(X, self.beta_est[j-2,:len(self.variables)],
+            self.beta_est[j-2,-2], self.beta_est[j-2,-1])
+        self.beta_se = sqrt_vec(-inv(hessian).diagonal())
+
+        self.confidence_interval = np.array(
+                [[self.beta[i] - st.norm.ppf(0.975) * self.beta_se[i],
+                    self.beta[i] + st.norm.ppf(0.975) * self.beta_se[i]]
+                    for i in range(len(self.beta))])
+
+        self.final_ll = self.log_likelihood(X, self.beta, self.mu, self.sigma)
+
+        if j < nb_iter:
+            self.converged = True
+        else:
+            self.converged = False
+
+        return self
 
         
