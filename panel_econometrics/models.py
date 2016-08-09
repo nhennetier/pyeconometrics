@@ -13,7 +13,7 @@ from math import exp, sqrt, log
 from panel_econometrics.utils import nCr, norm_cdf, unique_permutations
 
     
-  
+from numpy.linalg import matrix_rank
 
 class BaseModel():
     '''Base class inherited by other models
@@ -397,8 +397,8 @@ class RandomEffectsPanelModel(BaseModel):
         z, gamma = self.calculus_tools(X, w, beta, mu, sigma)
         
         num = np.exp(np.multiply(np.array(y), z.T.dot(gamma)[:,0]))
-        denom = 1 + np.exp(z.T.dot(gamma))
-        
+        denom = 1 + np.exp(z.T.dot(gamma)[:,0])
+
         result = np.prod(np.divide(num, denom))
 
         return result
@@ -435,7 +435,7 @@ class RandomEffectsPanelModel(BaseModel):
                 * st.logistic(0,1).pdf(w), -3*sigma, 3*sigma)[0]
         else:
             raise ValueError('Unknown value for argument residual_dist')
-        print(X, y, beta, mu, sigma)
+        
         return log(result)
         
             
@@ -468,10 +468,20 @@ class RandomEffectsPanelModel(BaseModel):
             self.score_obs(group, group[self.output], beta, mu, sigma))), axis=0)
             
     def hessian(self, X, beta, mu, sigma):
-        score_obs = np.array(X.apply(lambda group : \
-            np.array(self.score_obs(group, group[self.output], beta, mu, sigma), ndmin=2))).T
+        test = X.apply(lambda group : \
+            np.array(self.score_obs(group, group[self.output], beta, mu, sigma), ndmin=2)).values
+        print(test)
+        print(np.concatenate(list(test)))
+        print(np.sum(np.concatenate(list(test)), axis=0))
+        score_obs = np.sum(np.concatenate(X.apply(lambda group : \
+            np.array(self.score_obs(group, group[self.output], beta, mu, sigma), ndmin=2)),
+            axis=0), axis=0).T
         score = np.array(self.score(X, beta, mu, sigma), ndmin=2).T
         
+        print(score_obs)
+        print(score_obs.dot(score_obs.T))
+        print(score)
+        print(score.dot(score.T))
         result = score_obs.dot(score_obs.T) - score.dot(score.T) / len(X)
         
         return result
@@ -487,13 +497,13 @@ class RandomEffectsPanelModel(BaseModel):
         self.nb_obs = len(X)
         self.variables = [x for x in X.columns if x!=self.output]
         
-        beta_init = [0 for _ in range(len(self.variables))] + [0, 1]   
+        beta_init = [0, 1] + [0 for _ in range(len(self.variables))]   
         self.beta_est = np.zeros((nb_iter,len(beta_init)))
         self.beta_est[0] = beta_init
 
         X = X.groupby(level=0)
 
-        self.init_ll = self.log_likelihood(X, beta_init[:len(self.variables)], 0, 1)
+        self.init_ll = self.log_likelihood(X, beta_init[2:], 0, 1)
 
         if verbose:
             print('Initial log-likelihood : '+ str(self.init_ll))
@@ -501,39 +511,42 @@ class RandomEffectsPanelModel(BaseModel):
         
         j = 1
         while (j < nb_iter) and (j == 1 \
-                or self.log_likelihood(X, self.beta_est[j-1,:len(self.variables)],
-                    self.beta_est[j-1,-2], self.beta_est[j-1,-1]) \
-                - self.log_likelihood(X, self.beta_est[j-2,:len(self.variables)],
-                    self.beta_est[j-2,-2], self.beta_est[j-2,-1]) \
+                or self.log_likelihood(X, self.beta_est[j-1,2:],
+                    self.beta_est[j-1,0], self.beta_est[j-1,1]) \
+                - self.log_likelihood(X, self.beta_est[j-2,2:],
+                    self.beta_est[j-2,0], self.beta_est[j-2,1]) \
                 > 0.01):
             
-            score = self.score(X, self.beta_est[j-1,:len(self.variables)],
-                self.beta_est[j-1,-2], self.beta_est[j-1,-1])
+            score = self.score(X, self.beta_est[j-1,2:],
+                self.beta_est[j-1,0], self.beta_est[j-1,1])
 
-            hessian = self.hessian(X, self.beta_est[j-1,:len(self.variables)],
-                self.beta_est[j-1,-2], self.beta_est[j-1,-1])
+            hessian = self.hessian(X, self.beta_est[j-1,2:],
+                self.beta_est[j-1,0], self.beta_est[j-1,1])
 
             try:
+                print(score)
+                print(hessian)
+                print(matrix_rank(hessian))
                 self.beta_est[j] = self.beta_est[j-1] \
                     - inv(hessian).dot(score)
                 if verbose:              
                     print('Iteration %s, log_likelihood : %s'\
-                        % (j, self.log_likelihood(X, self.beta_est[j,:len(self.variables)],
-                            self.beta_est[j,-2], self.beta_est[j,-1])))
+                        % (j, self.log_likelihood(X, self.beta_est[j,2:],
+                            self.beta_est[j,0], self.beta_est[j,1])))
                 j += 1
 
             except:
                 raise ValueError('Improper classification problem' \
                     + ', should be 2 different labels')
 
-        self.beta = self.beta_est[j-2,:len(self.variables)]
-        self.mu = self.beta_est[j-2,-2]
-        self.sigma = self.beta_est[j-2,-1]
-        self.beta_est = self.beta_est[:j-1,:len(self.variables)]
+        self.beta = self.beta_est[j-2,2:]
+        self.mu = self.beta_est[j-2,0]
+        self.sigma = self.beta_est[j-2,1]
+        self.beta_est = self.beta_est[:j-1,2:]
 
         sqrt_vec = np.vectorize(sqrt)
-        hessian = self.hessian(X, self.beta_est[j-2,:len(self.variables)],
-            self.beta_est[j-2,-2], self.beta_est[j-2,-1])
+        hessian = self.hessian(X, self.beta_est[j-2,2:],
+            self.beta_est[j-2,0], self.beta_est[j-2,1])
         self.beta_se = sqrt_vec(-inv(hessian).diagonal())
 
         self.confidence_interval = np.array(
