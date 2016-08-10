@@ -146,5 +146,23 @@ class PanelBaseModel(BaseModel):
 
         return X
 
+
+class CensoredBaseModel(BaseModel):
+    '''Base class inherited by other models
+    Not intended to be used separately
+    '''
+    def input_data_preparation(self, X, output, drop_na=None, fill_value=None):
+        neg_values = X[X[ouput] <= 0]
+        if len(neg_values[neg_values[ouput] < 0]) > 0:
+            raise ValueError("Negative values where found in ouput variable." \
+                + "Please set all censored observations to 0 before fitting the model.")
+        elif len(neg_values) == 0:
+            raise ValueError("No censored observations were found." \
+                + "Please set output of all censored observations to 0 before fitting the model.")
+
+        X = self.handle_missing_values(X, drop_na, fill_value)
+
+        return X
+
         
         

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from math import sqrt, factorial, exp
+import scipy.stats as st
 
 
 def norm_cdf(x):
@@ -40,3 +41,11 @@ def nCr(n,r):
         return factorial(n) / factorial(r) / factorial(n-r)
     except:
         return 101
+
+
+def inverse_mills_ratio(x):
+    return st.norm.pdf(x) / st.norm.cdf(x)
+
+
+def derivate_inverse_mills_ratio(x):
+    return - inverse_mills_ratio(x) * (x + inverse_mills_ratio(x))

@@ -175,7 +175,7 @@ class FixedEffectPanelModel(PanelBaseModel):
             raise ValueError("Labels must be in the unit interval.")
         
         self.nb_obs = len(X)
-        self.variables = [x for x in X.columns if x!=self.output]
+        self.variables = [x for x in X.columns if x != self.output]
         
         beta_init = [0 for _ in range(len(self.variables))]   
         self.beta_est = np.zeros((nb_iter,len(beta_init)))
@@ -368,7 +368,7 @@ class RandomEffectsPanelModel(PanelBaseModel):
             raise ValueError("Labels must be in the unit interval.")
         
         self.nb_obs = len(X)
-        self.variables = [x for x in X.columns if x!=self.output]
+        self.variables = [x for x in X.columns if x != self.output]
         
         beta_init = [0, 1] + [0 for _ in range(len(self.variables))]   
         self.beta_est = np.zeros((nb_iter,len(beta_init)))
