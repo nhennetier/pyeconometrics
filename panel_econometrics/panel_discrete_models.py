@@ -2,7 +2,6 @@
 import numpy as np
 import scipy.stats as st
 import scipy.integrate as spint
-import matplotlib.pyplot as plt
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -10,137 +9,11 @@ warnings.filterwarnings('ignore')
 from numpy.linalg import inv
 from math import exp, sqrt, log
 
-from panel_econometrics.utils import nCr, norm_cdf, unique_permutations
-
-    
-from numpy.linalg import matrix_rank
-
-class BaseModel():
-    '''Base class inherited by other models
-    Not intended to be used separately
-    '''
-    def input_data_preparation(self, X, drop_na=None, fill_value=None):
-        try:
-            X = X.to_frame()
-        except:
-            if len(X.index.names) != 2:
-                raise ValueError("Only 2-level MultiIndex and Panel are supported.")
-
-        if drop_na is not None:
-            if drop_na:
-                X.dropna(inplace=True)
-            elif fill_value == 'mean':
-                X.fillna(X.mean(), inplace=True)
-            elif fill_value == 'median':
-                X.fillna(X.median(), inplace=True)
-            elif fill_value is not None:
-                for var in X.columns:
-                    try:
-                        X[var].fillna(fill_value.get(var), inplace=True)
-                    except:
-                        raise ValueError('\'fill_value\' argument must be in list ' \
-                            + '[\'mean\', \'median\'] or of type dict. See docstring for more info.')
-
-        X.insert(0, 'const', 1)
-
-        return X
-
-    def plot_trace_estimators(self):
-        try:
-            self.beta
-        except:
-            raise AttributeError('Fit method should be called before evaluating of the model')
-            
-        colors = ['b','g','r','c','m','y','k']
-        for k in range(len(self.beta)):
-            plt.plot(np.arange(1, len(self.beta_est)+1),
-                     self.beta_est[:,k],
-                     color=colors[(k-1) % len(colors)],
-                     label="Beta_%s" % k)
-
-        plt.xlim((1,len(self.beta_est)*1.2))
-        plt.xlabel('Iterations')
-        plt.ylabel('Estimators')
-        plt.title('Trace plot of estimators of beta', size=16)
-        plt.legend(loc='best')
-        plt.show()
-
-    def predict(self, X):
-        try :
-            self.beta
-        except:
-            raise AttributeError('Fit method should be called before evaluating the model.')
-
-        X = self.input_data_preparation(X)
-
-        Z = self.response_function(X, self.beta)
-        result = (np.sign(Z)+1)/2
-
-        try:
-            result = result.astype(int).rename('predicted_label')
-        except:
-            raise ValueError('One or several data are missing.')
-
-        return result
-        
-    def predict_proba(self, X):
-        try :
-            self.beta
-        except:
-            raise AttributeError('Fit method should be called before evaluating the model.')
-
-        X = self.input_data_preparation(X)
-
-        Z = self.response_function(X,self.beta)
-        return Z.apply(lambda x : norm_cdf(x))
-
-    def summary(self):
-        try:
-            self.beta
-        except:
-            raise AttributeError('Fit method should be called before evaluating of the model.')
-            
-        print('='*80)
-        print('%-17s %30s %1s %-20s %8s' \
-            % ('Dep. Variable:', self.output, ' ', 'Pseudo R-squ.:', 
-                "%.5f" % (1-self.final_ll/self.init_ll)))
-        print('%-17s %30s %1s %-20s %8s' \
-            % ('Model:', self.name, ' ', 'Log-Likelihood:', "%.3f" % self.final_ll))
-        print('%-17s %30s %1s %-20s %8s' \
-            % ('Method:', 'MLE', ' ', 'LL-Null:', "%.3f" % self.init_ll))
-        print('%-17s %30s %1s %-20s %8s' \
-            % ('No. Observations:', self.nb_obs, ' ', 'LLR p-value:',
-                "%.3f" % (1-st.chi2.cdf(2 * (self.final_ll - self.init_ll),
-                len(self.beta)))))
-        print('%-17s %30s %1s %-20s %8s' \
-            % ('Df Model:', len(self.beta)-1, ' ', ' ', ' '))
-        print('%-17s %30s %1s %-20s %8s' \
-            % ('Converged:', self.converged, ' ', ' ', ' '))
-        print('='*80)
-
-        length = max([len(x) for x in self.variables if x != self.output])
-        print('%25s %8s %8s %8s %8s %18s' \
-            % (' ', 'coef', 'std err', 't', 'P>|t|', '[95.0% Conf. Int.]'))
-        print('-'*80)
-
-        for i,var in enumerate([x for x in self.variables if x != self.output]):
-            print('%-24s %8s %8s %8s %8s %9s %9s' \
-                % (var, 
-                   "%.4f" % self.beta[i], 
-                   "%.3f" % self.beta_se[i], 
-                   "%.3f" % (self.beta[i] / self.beta_se[i]), 
-                   "%.3f" % (1-st.norm.cdf(abs(self.beta[i]) / self.beta_se[i])), 
-                   "%.3f" % self.confidence_interval[i, 0], 
-                   "%.3f" % self.confidence_interval[i, 1])
-                )
-        print('='*80)
+from panel_econometrics.base import PanelBaseModel
+from panel_econometrics.utils import nCr, unique_permutations
 
 
-
-
-
-    
-class FixedEffectPanelLogit(BaseModel):
+class FixedEffectPanelModel(PanelBaseModel):
     '''Fixed Effects Logit model for Panel Data
     Estimation of parameters with the Conditional Maximum Likelihood method
     '''
@@ -365,7 +238,7 @@ class FixedEffectPanelLogit(BaseModel):
 
 
 
-class RandomEffectsPanelModel(BaseModel):
+class RandomEffectsPanelModel(PanelBaseModel):
     def __init__(self, residual_dist):
         self.name = 'Panel Random Effects Model'
         self.residual_dist = residual_dist
@@ -468,21 +341,21 @@ class RandomEffectsPanelModel(BaseModel):
             self.score_obs(group, group[self.output], beta, mu, sigma))), axis=0)
             
     def hessian(self, X, beta, mu, sigma):
-        test = X.apply(lambda group : \
-            np.array(self.score_obs(group, group[self.output], beta, mu, sigma), ndmin=2)).values
-        print(test)
-        print(np.concatenate(list(test)))
-        print(np.sum(np.concatenate(list(test)), axis=0))
-        score_obs = np.sum(np.concatenate(X.apply(lambda group : \
-            np.array(self.score_obs(group, group[self.output], beta, mu, sigma), ndmin=2)),
-            axis=0), axis=0).T
+        score_obs = X.apply(lambda group : np.array(self.score_obs(
+            group, group[self.output], beta, mu, sigma), ndmin=2)).values
+        score_obs = np.concatenate(list(score_obs))
+        sum_score_obs = []
+        for i in range(score_obs.shape[0]):
+            row = np.array(score_obs[i,:], ndmin=2)
+            sum_score_obs.append(row.T.dot(row))
+        sum_score_obs = sum(sum_score_obs)
+        print(sum_score_obs)
+
         score = np.array(self.score(X, beta, mu, sigma), ndmin=2).T
-        
-        print(score_obs)
-        print(score_obs.dot(score_obs.T))
         print(score)
-        print(score.dot(score.T))
-        result = score_obs.dot(score_obs.T) - score.dot(score.T) / len(X)
+
+        result = sum_score_obs - score.dot(score.T) / len(X)
+        print(result)
         
         return result
 
@@ -524,9 +397,6 @@ class RandomEffectsPanelModel(BaseModel):
                 self.beta_est[j-1,0], self.beta_est[j-1,1])
 
             try:
-                print(score)
-                print(hessian)
-                print(matrix_rank(hessian))
                 self.beta_est[j] = self.beta_est[j-1] \
                     - inv(hessian).dot(score)
                 if verbose:              
@@ -562,5 +432,3 @@ class RandomEffectsPanelModel(BaseModel):
             self.converged = False
 
         return self
-
-        
