@@ -169,6 +169,7 @@ class FixedEffectPanelModel(PanelBaseModel):
         '''
         self.output = output
         X = self.input_data_preparation(X.copy(), drop_na, fill_value)
+        X.insert(0, '_cons', 1)
 
         labels = list(np.unique(X[self.output]))
         if labels != [0,1]:
@@ -268,28 +269,23 @@ class RandomEffectsPanelModel(PanelBaseModel):
 
     def conditional_density_obs(self, X, w, y, beta, mu, sigma):
         z, gamma = self.calculus_tools(X, w, beta, mu, sigma)
-        
-        num = np.exp(np.multiply(np.array(y), z.T.dot(gamma)[:,0]))
-        denom = 1 + np.exp(z.T.dot(gamma)[:,0])
+        item = z.T.dot(gamma)[:,0]
 
+        num = np.exp(np.multiply(np.array(y), item))
+        denom = 1 + np.exp(item)
         result = np.prod(np.divide(num, denom))
-
+        
         return result
 
     def grad_conditional_density_obs(self, X, w, y, beta, mu, sigma):
         z, gamma = self.calculus_tools(X, w, beta, mu, sigma)
-
-        item1 = np.exp(np.multiply(y, z.T.dot(gamma)[:,0]))
-        item2 = np.exp(z.T.dot(gamma)[:,0])
-
-        term1 = np.multiply(y, np.multiply(item1, 1+item2))
-        term2 = np.multiply(item1, item2)
-        denom = np.multiply(1+item2, 1+item2)
-
-        result = np.divide(term1 - term2, denom)
-        result = np.prod(result)
-        result = np.multiply(result, np.prod(z, axis=1))
-
+        
+        item = np.exp(z.T.dot(gamma)[:,0])
+        result = np.array(y) - item / (1+item)
+        
+        result = z.dot(result)
+        result = result * self.conditional_density_obs(X, w, y, beta, mu, sigma)
+        
         return result
         
     def log_likelihood_obs(self, X, y, beta, mu, sigma):
@@ -333,7 +329,6 @@ class RandomEffectsPanelModel(PanelBaseModel):
             raise ValueError('Unknown value for argument residual_dist')
 
         result = result / exp(self.log_likelihood_obs(X, y, beta, mu, sigma))
-
         return result
 
     def score(self, X, beta, mu, sigma):
@@ -349,14 +344,10 @@ class RandomEffectsPanelModel(PanelBaseModel):
             row = np.array(score_obs[i,:], ndmin=2)
             sum_score_obs.append(row.T.dot(row))
         sum_score_obs = sum(sum_score_obs)
-        print(sum_score_obs)
-
-        score = np.array(self.score(X, beta, mu, sigma), ndmin=2).T
-        print(score)
-
-        result = sum_score_obs - score.dot(score.T) / len(X)
-        print(result)
         
+        score = np.array(self.score(X, beta, mu, sigma), ndmin=2).T
+        result = sum_score_obs - score.dot(score.T) / len(X)
+
         return result
 
     def fit(self, X, output, nb_iter=20, drop_na=True, fill_value=None, verbose=False):
@@ -392,10 +383,9 @@ class RandomEffectsPanelModel(PanelBaseModel):
             
             score = self.score(X, self.beta_est[j-1,2:],
                 self.beta_est[j-1,0], self.beta_est[j-1,1])
-
+            
             hessian = self.hessian(X, self.beta_est[j-1,2:],
                 self.beta_est[j-1,0], self.beta_est[j-1,1])
-
             try:
                 self.beta_est[j] = self.beta_est[j-1] \
                     - inv(hessian).dot(score)
