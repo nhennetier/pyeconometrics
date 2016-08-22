@@ -16,7 +16,6 @@ class BaseModel():
     '''
     def input_data_preparation(self, X, drop_na=None, fill_value=None):
         X = self.handle_missing_values(X, drop_na, fill_value)
-
         return X
 
     def handle_missing_values(self, X, drop_na=None, fill_value=None):
@@ -34,8 +33,6 @@ class BaseModel():
                     except:
                         raise ValueError('\'fill_value\' argument must be in list ' \
                             + '[\'mean\', \'median\'] or of type dict. See docstring for more info.')
-
-        X.insert(0, '_cons', 1)
 
         return X
 
@@ -66,6 +63,7 @@ class BaseModel():
             raise AttributeError('Fit method should be called before evaluating the model.')
 
         X = self.input_data_preparation(X)
+        X.insert(0, '_cons', 1)
 
         Z = self.response_function(X, self.beta)
         result = (np.sign(Z)+1)/2
@@ -84,6 +82,7 @@ class BaseModel():
             raise AttributeError('Fit method should be called before evaluating the model.')
 
         X = self.input_data_preparation(X)
+        X.insert(0, '_cons', 1)
 
         Z = self.response_function(X,self.beta)
         return Z.apply(lambda x : norm_cdf(x))
