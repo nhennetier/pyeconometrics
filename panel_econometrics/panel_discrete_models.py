@@ -190,22 +190,23 @@ class FixedEffectPanelModel(PanelBaseModel):
             print('Initial log-likelihood : '+ str(self.init_ll))
             print('Parameters estimation in progress.')
         
+        current_ll = self.init_ll
+        prev_ll = self.init_ll
         j = 1
-        while (j < nb_iter) and (j == 1 \
-                or self.log_likelihood(X, self.beta_est[j-1]) \
-                - self.log_likelihood(X, self.beta_est[j-2]) \
-                > 0.01):
+        while (j < nb_iter) 
+            and (j == 1 or (current_ll - prev_ll > 0.01)):
             
             score = self.score(X, self.beta_est[j-1])
-
             hessian = self.hessian(X, self.beta_est[j-1])
 
             try:
                 self.beta_est[j] = self.beta_est[j-1] \
                     - inv(hessian).dot(score)
+                prev_ll = current_ll
+                current_ll = self.log_likelihood(X, self.beta_est[j])
                 if verbose:              
                     print('Iteration %s, log_likelihood : %s'\
-                        % (j, self.log_likelihood(X, self.beta_est[j])))
+                        % (j, current_ll))
                 j += 1
 
             except:
@@ -224,7 +225,7 @@ class FixedEffectPanelModel(PanelBaseModel):
                     self.beta[i] + st.norm.ppf(0.975) * self.beta_se[i]]
                     for i in range(len(self.beta))])
 
-        self.final_ll = self.log_likelihood(X, self.beta)
+        self.final_ll = prev_ll
 
         if j < nb_iter:
             self.converged = True
@@ -264,7 +265,7 @@ class RandomEffectsPanelModel(PanelBaseModel):
         beta = np.array(beta, ndmin=2)
         beta = np.repeat(beta, X.shape[0], axis=0)
         gamma = np.concatenate((gamma, beta), axis=1).T
-
+        
         return z, gamma
 
     def conditional_density_obs(self, X, w, y, beta, mu, sigma):
@@ -373,26 +374,25 @@ class RandomEffectsPanelModel(PanelBaseModel):
             print('Initial log-likelihood : '+ str(self.init_ll))
             print('Parameters estimation in progress.')
         
+        current_ll = self.init_ll
+        prev_ll = self.init_ll
         j = 1
-        while (j < nb_iter) and (j == 1 \
-                or self.log_likelihood(X, self.beta_est[j-1,2:],
-                    self.beta_est[j-1,0], self.beta_est[j-1,1]) \
-                - self.log_likelihood(X, self.beta_est[j-2,2:],
-                    self.beta_est[j-2,0], self.beta_est[j-2,1]) \
-                > 0.01):
-            
+        while (j < nb_iter) 
+            and (j == 1 or (current_ll - prev_ll > 0.01)):
+
             score = self.score(X, self.beta_est[j-1,2:],
                 self.beta_est[j-1,0], self.beta_est[j-1,1])
-            
             hessian = self.hessian(X, self.beta_est[j-1,2:],
                 self.beta_est[j-1,0], self.beta_est[j-1,1])
+
             try:
                 self.beta_est[j] = self.beta_est[j-1] \
                     - inv(hessian).dot(score)
+                prev_ll = current_ll
+                current_ll = self.log_likelihood(X, self.beta_est[j])
                 if verbose:              
                     print('Iteration %s, log_likelihood : %s'\
-                        % (j, self.log_likelihood(X, self.beta_est[j,2:],
-                            self.beta_est[j,0], self.beta_est[j,1])))
+                        % (j, current_ll))
                 j += 1
 
             except:
@@ -414,7 +414,7 @@ class RandomEffectsPanelModel(PanelBaseModel):
                     self.beta[i] + st.norm.ppf(0.975) * self.beta_se[i]]
                     for i in range(len(self.beta))])
 
-        self.final_ll = self.log_likelihood(X, self.beta, self.mu, self.sigma)
+        self.final_ll = prev_ll
 
         if j < nb_iter:
             self.converged = True
