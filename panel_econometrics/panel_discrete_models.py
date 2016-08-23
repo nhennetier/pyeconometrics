@@ -193,7 +193,7 @@ class FixedEffectPanelModel(PanelBaseModel):
         current_ll = self.init_ll
         prev_ll = self.init_ll
         j = 1
-        while (j < nb_iter) 
+        while (j < nb_iter) \
             and (j == 1 or (current_ll - prev_ll > 0.01)):
             
             score = self.__score(X, self.beta_est[j-1])
@@ -202,16 +202,16 @@ class FixedEffectPanelModel(PanelBaseModel):
             try:
                 self.beta_est[j] = self.beta_est[j-1] \
                     - inv(hessian).dot(score)
-                prev_ll = current_ll
-                current_ll = self.__log_likelihood(X, self.beta_est[j])
-                if verbose:              
-                    print('Iteration %s, log_likelihood : %s'\
-                        % (j, current_ll))
-                j += 1
-
             except:
                 raise ValueError('Improper classification problem' \
                     + ', should be 2 different labels')
+
+            prev_ll = current_ll
+            current_ll = self.__log_likelihood(X, self.beta_est[j])
+            if verbose:              
+                print('Iteration %s, log-likelihood : %s'\
+                    % (j, current_ll))
+            j += 1
 
         self.beta = self.beta_est[j-2]
         self.beta_est = self.beta_est[:j-1,:]
@@ -338,6 +338,7 @@ class RandomEffectsPanelModel(PanelBaseModel):
         return (list_score_obs, np.sum(np.array(list_score_obs), axis=0))
             
     def __hessian(self, list_score_obs):
+        list_score_obs = list_score_obs.apply(lambda array : np.array(array, ndmin=2)).values
         list_score_obs = np.concatenate(list(list_score_obs))
         sum_score_obs = []
         for i in range(list_score_obs.shape[0]):
@@ -346,11 +347,39 @@ class RandomEffectsPanelModel(PanelBaseModel):
         sum_score_obs = sum(sum_score_obs)
         
         score = np.array(np.sum(np.array(list_score_obs), axis=0), ndmin=2).T
-        result = sum_score_obs - score.dot(score.T) / len(X)
+        result = sum_score_obs - score.dot(score.T) / self.nb_obs
 
         return result
 
     def fit(self, X, output, nb_iter=20, drop_na=True, fill_value=None, verbose=False):
+        '''Maximum Likelihhod Estimation
+        Implement a Newton-Raphson algorithm to estimate parameters
+
+        Parameters:
+        ----------
+        X: 2-level MultiIndex Dataframe
+            Database to fit the model
+
+        output: string
+            Name of the variable to predict
+
+        nb_iter: integer (optional, default 20)
+            Maximal number of iteration before the end of the Newton-Raphson algorithm
+
+        drop_na: boolean (optional, default True)
+            Indicate the method to handle missing values in X
+            If drop_na = False, fill_value has to be given
+
+        fill_value: string or dict (optional, defaul None)
+            Considered only if drop_na = False
+            Possible values:
+                - 'mean': missing values of a column are replaced by the mean of that column
+                - 'median': missing values of a column are replaced by the median of that column
+                - dict: keys must be variables' names and associated values the values used to fill Nan
+
+        verbose: boolean (optional, default False)
+            If set to True, allows prints of Newton-Raphson algorithm's progress
+        '''
         self.output = output
         X = self.input_data_preparation(X.copy(), drop_na, fill_value)
 
@@ -367,7 +396,7 @@ class RandomEffectsPanelModel(PanelBaseModel):
 
         X = X.groupby(level=0)
 
-        self.init_ll = self.log_likelihood(X, beta_init[2:], 0, 1)
+        self.init_ll = self.__log_likelihood(X, beta_init[2:], 0, 1)
 
         if verbose:
             print('Initial log-likelihood : '+ str(self.init_ll))
@@ -376,7 +405,7 @@ class RandomEffectsPanelModel(PanelBaseModel):
         current_ll = self.init_ll
         prev_ll = self.init_ll
         j = 1
-        while (j < nb_iter) 
+        while (j < nb_iter) \
             and (j == 1 or (current_ll - prev_ll > 0.01)):
 
             list_score_obs, score = self.__score(X, self.beta_est[j-1,2:],
@@ -386,26 +415,28 @@ class RandomEffectsPanelModel(PanelBaseModel):
             try:
                 self.beta_est[j] = self.beta_est[j-1] \
                     - inv(hessian).dot(score)
-                prev_ll = current_ll
-                current_ll = self.log_likelihood(X, self.beta_est[j])
-                if verbose:              
-                    print('Iteration %s, log_likelihood : %s'\
-                        % (j, current_ll))
-                j += 1
-
             except:
                 raise ValueError('Improper classification problem' \
                     + ', should be 2 different labels')
 
+            prev_ll = current_ll
+            current_ll = self.__log_likelihood(X, self.beta_est[j,2:],
+                self.beta_est[j,0], self.beta_est[j,1])
+            if verbose:              
+                print('Iteration %s, log-likelihood : %s'\
+                    % (j, current_ll))
+            j += 1
+
         self.beta = self.beta_est[j-2,2:]
         self.mu = self.beta_est[j-2,0]
         self.sigma = self.beta_est[j-2,1]
-        self.beta_est = self.beta_est[:j-1,2:]
+        self.beta_est = self.beta_est[:j-1,:]
 
         sqrt_vec = np.vectorize(sqrt)
-        hessian = self.__hessian(X, self.beta_est[j-2,2:],
-            self.beta_est[j-2,0], self.beta_est[j-2,1])
-        self.beta_se = sqrt_vec(-inv(hessian).diagonal())
+        list_score_obs, score = self.__score(X, self.beta,
+            self.mu, self.sigma)
+        hessian = self.__hessian(list_score_obs)
+        self.beta_se = sqrt_vec(inv(hessian).diagonal())
 
         self.confidence_interval = np.array(
                 [[self.beta[i] - st.norm.ppf(0.975) * self.beta_se[i],

@@ -65,7 +65,7 @@ class BaseModel():
         X = self.input_data_preparation(X)
         X.insert(0, '_cons', 1)
 
-        Z = self.response_function(X, self.beta)
+        Z = self.__response_function(X, self.beta)
         result = (np.sign(Z)+1)/2
 
         try:
@@ -84,7 +84,7 @@ class BaseModel():
         X = self.input_data_preparation(X)
         X.insert(0, '_cons', 1)
 
-        Z = self.response_function(X,self.beta)
+        Z = self.r__esponse_function(X,self.beta)
         return Z.apply(lambda x : norm_cdf(x))
 
     def summary(self):
