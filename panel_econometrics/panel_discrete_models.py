@@ -20,7 +20,7 @@ class FixedEffectPanelModel(PanelBaseModel):
     def __init__(self):
         self.name = 'Panel Fixed Effects Logit'
 
-    def response_function(self, X, beta):
+    def __response_function(self, X, beta):
         try:
             X.drop(self.output, axis=1, inplace=True)
         except:
@@ -32,11 +32,11 @@ class FixedEffectPanelModel(PanelBaseModel):
 
         return Z.rename('response')
         
-    def log_likelihood_obs(self, X, y, beta):
+    def __log_likelihood_obs(self, X, y, beta):
         X.reset_index(drop=True,inplace=True)
         y.reset_index(drop=True,inplace=True)
 
-        Z = np.array(self.response_function(X, beta))
+        Z = np.array(self.__response_function(X, beta))
 
         if nCr(len(y),sum(y)) <= 100:
             perms = unique_permutations(y)
@@ -50,14 +50,14 @@ class FixedEffectPanelModel(PanelBaseModel):
         result = Z.dot(np.array(y)) - log(sum(result))
         return result
             
-    def log_likelihood(self, X, beta):
+    def __log_likelihood(self, X, beta):
         result = sum(np.array(X.apply(lambda group : \
-            self.log_likelihood_obs(group,
+            self.__log_likelihood_obs(group,
             group[self.output], beta))))
 
         return result
         
-    def conditional_probability(self, X, y, beta):
+    def __conditional_probability(self, X, y, beta):
         if nCr(len(y),sum(y)) <= 100:
             perms = unique_permutations(y)
         else:
@@ -72,7 +72,7 @@ class FixedEffectPanelModel(PanelBaseModel):
 
         return result
     
-    def score_obs(self, X, y, beta):
+    def __score_obs(self, X, y, beta):
         X.drop(self.output, axis=1, inplace=True)
 
         X.reset_index(drop=True,inplace=True)
@@ -90,18 +90,18 @@ class FixedEffectPanelModel(PanelBaseModel):
             result = []
             for z in perms:
                 result.append(np.array(z) \
-                    * self.conditional_probability(X,z,beta))
+                    * self.__conditional_probability(X,z,beta))
 
             result = np.sum(np.array(result), axis=0)
             result = np.array(X).T.dot(np.array(y) - result)
 
             return result
 
-    def score(self, X, beta):
+    def __score(self, X, beta):
         return np.sum(np.array(X.apply(lambda group : \
-            self.score_obs(group, group[self.output], beta))), axis=0)
+            self.__score_obs(group, group[self.output], beta))), axis=0)
             
-    def hessian_obs(self, X, y, beta):
+    def __hessian_obs(self, X, y, beta):
         X.drop(self.output, axis=1, inplace=True)
 
         X.reset_index(drop=True,inplace=True)
@@ -122,7 +122,7 @@ class FixedEffectPanelModel(PanelBaseModel):
             result = []
             i = 0
             for z in perms:
-                probas.append(self.conditional_probability(X,z,beta))
+                probas.append(self.__conditional_probability(X,z,beta))
                 esp.append(np.array(z) * probas[i])
                 result.append(np.array(z).dot(np.array(z).T) * probas[i])
                 i += 1
@@ -134,9 +134,9 @@ class FixedEffectPanelModel(PanelBaseModel):
 
             return -result
 
-    def hessian(self, X, beta):
+    def __hessian(self, X, beta):
         return np.sum(np.array(X.apply(lambda group : \
-            self.hessian_obs(group,group[self.output], beta))), axis=0)
+            self.__hessian_obs(group,group[self.output], beta))), axis=0)
 
     def fit(self, X, output, nb_iter=20, drop_na=True, fill_value=None, verbose=False):
         '''Maximum Likelihhod Estimation
@@ -196,14 +196,14 @@ class FixedEffectPanelModel(PanelBaseModel):
         while (j < nb_iter) 
             and (j == 1 or (current_ll - prev_ll > 0.01)):
             
-            score = self.score(X, self.beta_est[j-1])
-            hessian = self.hessian(X, self.beta_est[j-1])
+            score = self.__score(X, self.beta_est[j-1])
+            hessian = self.__hessian(X, self.beta_est[j-1])
 
             try:
                 self.beta_est[j] = self.beta_est[j-1] \
                     - inv(hessian).dot(score)
                 prev_ll = current_ll
-                current_ll = self.log_likelihood(X, self.beta_est[j])
+                current_ll = self.__log_likelihood(X, self.beta_est[j])
                 if verbose:              
                     print('Iteration %s, log_likelihood : %s'\
                         % (j, current_ll))
@@ -217,7 +217,7 @@ class FixedEffectPanelModel(PanelBaseModel):
         self.beta_est = self.beta_est[:j-1,:]
 
         sqrt_vec = np.vectorize(sqrt)
-        hessian = self.hessian(X, self.beta_est[j-2])
+        hessian = self.__hessian(X, self.beta_est[j-2])
         self.beta_se = sqrt_vec(-inv(hessian).diagonal())
 
         self.confidence_interval = np.array(
@@ -245,7 +245,7 @@ class RandomEffectsPanelModel(PanelBaseModel):
         self.name = 'Panel Random Effects Model'
         self.residual_dist = residual_dist
 
-    def response_function(self, X, beta, mu):
+    def __response_function(self, X, beta, mu):
         try:
             X.drop(self.output, axis=1, inplace=True)
         except:
@@ -257,7 +257,7 @@ class RandomEffectsPanelModel(PanelBaseModel):
 
         return Z.rename('response')
 
-    def calculus_tools(self, X, w, beta, mu, sigma):
+    def __calculus_tools(self, X, w, beta, mu, sigma):
         z = np.repeat(np.array([[1, w]]), X.shape[0], axis=0)
         z = np.concatenate((z, X), axis=1).T
 
@@ -268,8 +268,8 @@ class RandomEffectsPanelModel(PanelBaseModel):
         
         return z, gamma
 
-    def conditional_density_obs(self, X, w, y, beta, mu, sigma):
-        z, gamma = self.calculus_tools(X, w, beta, mu, sigma)
+    def __conditional_density_obs(self, X, w, y, beta, mu, sigma):
+        z, gamma = self.__calculus_tools(X, w, beta, mu, sigma)
         item = z.T.dot(gamma)[:,0]
 
         num = np.exp(np.multiply(np.array(y), item))
@@ -278,18 +278,18 @@ class RandomEffectsPanelModel(PanelBaseModel):
         
         return result
 
-    def grad_conditional_density_obs(self, X, w, y, beta, mu, sigma):
-        z, gamma = self.calculus_tools(X, w, beta, mu, sigma)
+    def __grad_conditional_density_obs(self, X, w, y, beta, mu, sigma):
+        z, gamma = self.__calculus_tools(X, w, beta, mu, sigma)
         
         item = np.exp(z.T.dot(gamma)[:,0])
         result = np.array(y) - item / (1+item)
         
         result = z.dot(result)
-        result = result * self.conditional_density_obs(X, w, y, beta, mu, sigma)
+        result = result * self.__conditional_density_obs(X, w, y, beta, mu, sigma)
         
         return result
         
-    def log_likelihood_obs(self, X, y, beta, mu, sigma):
+    def __log_likelihood_obs(self, X, y, beta, mu, sigma):
         X.reset_index(drop=True,inplace=True)
         y.reset_index(drop=True,inplace=True)
         try:
@@ -298,10 +298,10 @@ class RandomEffectsPanelModel(PanelBaseModel):
             pass
 
         if self.residual_dist == 'probit':
-            result = spint.quad(lambda w : self.conditional_density_obs(X, w, y, beta, mu, sigma) \
+            result = spint.quad(lambda w : self.__conditional_density_obs(X, w, y, beta, mu, sigma) \
                 * st.norm(0,1).pdf(w), -3*sigma, 3*sigma)[0]
         elif self.residual_dist == 'logit':
-            result = spint.quad(lambda w : self.conditional_density_obs(X, w, y, beta, mu, sigma) \
+            result = spint.quad(lambda w : self.__conditional_density_obs(X, w, y, beta, mu, sigma) \
                 * st.logistic(0,1).pdf(w), -3*sigma, 3*sigma)[0]
         else:
             raise ValueError('Unknown value for argument residual_dist')
@@ -309,44 +309,43 @@ class RandomEffectsPanelModel(PanelBaseModel):
         return log(result)
         
             
-    def log_likelihood(self, X, beta, mu, sigma):
+    def __log_likelihood(self, X, beta, mu, sigma):
         result = np.sum(np.array(X.apply(lambda group : \
-            self.log_likelihood_obs(group, group[self.output], beta, mu, sigma))), axis=0)
+            self.__log_likelihood_obs(group, group[self.output], beta, mu, sigma))), axis=0)
 
         return result
         
-    def score_obs(self, X, y, beta, mu, sigma):
+    def __score_obs(self, X, y, beta, mu, sigma):
         X.reset_index(drop=True,inplace=True)
         y.reset_index(drop=True,inplace=True)
         X.drop(self.output, axis=1, inplace=True)
         
         if self.residual_dist == 'probit':
-            result = np.array([spint.quad(lambda w : self.grad_conditional_density_obs(X, w, y, beta, mu, sigma)[i] \
+            result = np.array([spint.quad(lambda w : self.__grad_conditional_density_obs(X, w, y, beta, mu, sigma)[i] \
                 * st.norm(0,1).pdf(w), -3*sigma, 3*sigma)[0] for i in range(len(beta)+2)])
         elif self.residual_dist == 'logit':
-            result = np.array([spint.quad(lambda w : self.grad_conditional_density_obs(X, w, y, beta, mu, sigma)[i] \
+            result = np.array([spint.quad(lambda w : self.__grad_conditional_density_obs(X, w, y, beta, mu, sigma)[i] \
                 * st.logistic(0,1).pdf(w), -3*sigma, 3*sigma)[0] for i in range(len(beta)+2)])
         else:
             raise ValueError('Unknown value for argument residual_dist')
 
-        result = result / exp(self.log_likelihood_obs(X, y, beta, mu, sigma))
+        result = result / exp(self.__log_likelihood_obs(X, y, beta, mu, sigma))
         return result
 
-    def score(self, X, beta, mu, sigma):
-        return np.sum(np.array(X.apply(lambda group : \
-            self.score_obs(group, group[self.output], beta, mu, sigma))), axis=0)
+    def __score(self, X, beta, mu, sigma):
+        list_score_obs = X.apply(lambda group : self.__score_obs(
+            group, group[self.output], beta, mu, sigma))
+        return (list_score_obs, np.sum(np.array(list_score_obs), axis=0))
             
-    def hessian(self, X, beta, mu, sigma):
-        score_obs = X.apply(lambda group : np.array(self.score_obs(
-            group, group[self.output], beta, mu, sigma), ndmin=2)).values
-        score_obs = np.concatenate(list(score_obs))
+    def __hessian(self, list_score_obs):
+        list_score_obs = np.concatenate(list(list_score_obs))
         sum_score_obs = []
-        for i in range(score_obs.shape[0]):
-            row = np.array(score_obs[i,:], ndmin=2)
+        for i in range(list_score_obs.shape[0]):
+            row = np.array(list_score_obs[i,:], ndmin=2)
             sum_score_obs.append(row.T.dot(row))
         sum_score_obs = sum(sum_score_obs)
         
-        score = np.array(self.score(X, beta, mu, sigma), ndmin=2).T
+        score = np.array(np.sum(np.array(list_score_obs), axis=0), ndmin=2).T
         result = sum_score_obs - score.dot(score.T) / len(X)
 
         return result
@@ -380,10 +379,9 @@ class RandomEffectsPanelModel(PanelBaseModel):
         while (j < nb_iter) 
             and (j == 1 or (current_ll - prev_ll > 0.01)):
 
-            score = self.score(X, self.beta_est[j-1,2:],
+            list_score_obs, score = self.__score(X, self.beta_est[j-1,2:],
                 self.beta_est[j-1,0], self.beta_est[j-1,1])
-            hessian = self.hessian(X, self.beta_est[j-1,2:],
-                self.beta_est[j-1,0], self.beta_est[j-1,1])
+            hessian = self.__hessian(list_score_obs)
 
             try:
                 self.beta_est[j] = self.beta_est[j-1] \
@@ -405,7 +403,7 @@ class RandomEffectsPanelModel(PanelBaseModel):
         self.beta_est = self.beta_est[:j-1,2:]
 
         sqrt_vec = np.vectorize(sqrt)
-        hessian = self.hessian(X, self.beta_est[j-2,2:],
+        hessian = self.__hessian(X, self.beta_est[j-2,2:],
             self.beta_est[j-2,0], self.beta_est[j-2,1])
         self.beta_se = sqrt_vec(-inv(hessian).diagonal())
 
