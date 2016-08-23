@@ -11,16 +11,16 @@ filepath = os.path.dirname(os.path.abspath(__file__))
 df = pd.read_csv(filepath + '/dataset/jtrain.csv')
 df.set_index(['fcode','year'], inplace=True)
 
-df = df.head(12)
-train = df.head(9)
-test = df.ix[9:]
+# df = df.head(12)
+# train = df.head(9)
+# test = df.ix[9:]
 
-# train, test = train_test_split(df, test_size = 0.2, random_state=1995)
-# test.dropna(inplace=True)
+train, test = train_test_split(df, test_size = 0.2, random_state=1995)
+test.dropna(inplace=True)
 
 
-# #1. Fixed Effects Logit Model
-# FE = FixedEffectPanelLogit()
+#1. Fixed Effects Logit Model
+# FE = FixedEffectPanelModel()
 # FE.fit(train, 'hrsemp', verbose=True)
 # FE.summary()
 
@@ -36,7 +36,7 @@ test = df.ix[9:]
 # print('RE Probit, accuracy score: %s' % accuracy_score(test['hrsemp'], y_pred))
 
 
-#3. Random Effects Logit Model
+# #3. Random Effects Logit Model
 RE = RandomEffectsPanelModel('logit')
 RE.fit(train, 'hrsemp', verbose=True)
 RE.summary()
