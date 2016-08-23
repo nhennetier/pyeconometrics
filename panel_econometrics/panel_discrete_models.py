@@ -184,7 +184,7 @@ class FixedEffectPanelModel(PanelBaseModel):
 
         X = X.groupby(level=0)
 
-        self.init_ll = self.log_likelihood(X, beta_init)
+        self.init_ll = self.__log_likelihood(X, beta_init)
 
         if verbose:
             print('Initial log-likelihood : '+ str(self.init_ll))
