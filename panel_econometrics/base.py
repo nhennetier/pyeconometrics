@@ -37,9 +37,7 @@ class BaseModel():
         return X
 
     def plot_trace_estimators(self):
-        try:
-            self.beta
-        except:
+        if self.beta is None:
             raise AttributeError('Fit method should be called before evaluating of the model')
             
         colors = ['b','g','r','c','m','y','k']
@@ -57,9 +55,7 @@ class BaseModel():
         plt.show()
 
     def predict(self, X):
-        try :
-            self.beta
-        except:
+        if self.beta is None:
             raise AttributeError('Fit method should be called before evaluating the model.')
 
         X = self.input_data_preparation(X)
@@ -76,9 +72,7 @@ class BaseModel():
         return result
         
     def predict_proba(self, X):
-        try :
-            self.beta
-        except:
+        if self.beta is None:
             raise AttributeError('Fit method should be called before evaluating the model.')
 
         X = self.input_data_preparation(X)
@@ -88,9 +82,7 @@ class BaseModel():
         return Z.apply(lambda x : norm_cdf(x))
 
     def summary(self):
-        try:
-            self.beta
-        except:
+        if self.beta is None:
             raise AttributeError('Fit method should be called before evaluating of the model.')
             
         print('='*80)

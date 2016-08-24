@@ -19,6 +19,16 @@ class FixedEffectPanelModel(PanelBaseModel):
     '''
     def __init__(self):
         self.name = 'Panel Fixed Effects Logit'
+        self.output = None
+        self.variables = None
+        self.nb_obs = None
+        self.init_ll = None
+        self.beta = None
+        self.beta_est = None
+        self.beta_se = None
+        self.confidence_interval = None
+        self.final_ll = None
+        self.converged = None
 
     def __response_function(self, X, beta):
         try:
@@ -244,6 +254,18 @@ class RandomEffectsPanelModel(PanelBaseModel):
     def __init__(self, residual_dist):
         self.name = 'Panel Random Effects Model'
         self.residual_dist = residual_dist
+        self.output = None
+        self.variables = None
+        self.nb_obs = None
+        self.init_ll = None
+        self.beta = None
+        self.mu = None
+        self.sigma = None
+        self.beta_est = None
+        self.beta_se = None
+        self.confidence_interval = None
+        self.final_ll = None
+        self.converged = None
 
     def __response_function(self, X, beta, mu):
         try:
