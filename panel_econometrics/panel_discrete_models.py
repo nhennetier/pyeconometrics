@@ -31,14 +31,15 @@ class FixedEffectPanelModel(PanelBaseModel):
         self.converged = None
 
     def __response_function(self, X, beta):
+        A = X.copy()
         try:
-            X.drop(self.output, axis=1, inplace=True)
+            A.drop(self.output, axis=1, inplace=True)
         except:
             pass
         
         Z = 0
         for i,var in enumerate(self.variables):
-            Z += beta[i] * X[var]
+            Z += beta[i] * A[var]
 
         return Z.rename('response')
         
@@ -268,14 +269,15 @@ class RandomEffectsPanelModel(PanelBaseModel):
         self.converged = None
 
     def __response_function(self, X, beta, mu):
+        A = X.copy()
         try:
-            X.drop(self.output, axis=1, inplace=True)
+            A.drop(self.output, axis=1, inplace=True)
         except:
             pass
         
         Z = mu
         for i,var in enumerate(self.variables):
-            Z += beta[i] * X[var]
+            Z += beta[i] * A[var]
 
         return Z.rename('response')
 
