@@ -18,14 +18,15 @@ class TobitModel(CensoredBaseModel):
         self.name = 'Tobit I Model'
 
     def __response_function(self, X, beta):
+        A = X.copy()
         try:
-            X.drop(self.output, axis=1, inplace=True)
+            A.drop(self.output, axis=1, inplace=True)
         except:
             pass
         
         Z = 0
         for i,var in enumerate(self.variables):
-            Z += beta[i] * X[var]
+            Z += beta[i] * A[var]
 
         return Z.rename('response')
         
@@ -65,11 +66,12 @@ class TobitModel(CensoredBaseModel):
 
         inverse_mills_ratio_vec = np.vectorize(inverse_mills_ratio)
 
-        grad_cens = inverse_mills_ratio_vec(-np.array(self.__response_function(X_cens, b), ndmin=2))
-        grad_cens = - np.sum(np.multiply(X, grad_cens))
+        grad_cens = inverse_mills_ratio_vec(np.array(self.__response_function(X_cens, b), ndmin=2))
+        print(X_cens.T, grad_cens)
+        grad_cens = - np.sum(X_cens * grad_cens)
 
         grad_uncens = s * np.array(y_uncens) - np.array(self.__response_function(X_uncens, b), ndmin=2)
-        grad_uncens = np.sum(np.multiply(X, grad_uncens))
+        grad_uncens = np.sum(np.multiply(X_uncens, grad_uncens))
 
         result = grad_cens + grad_uncens
         return result
@@ -167,18 +169,16 @@ class TobitModel(CensoredBaseModel):
         self.output = output
         X = self.input_data_preparation(X.copy(), self.output, drop_na, fill_value)
 
-        self.nb_censored_obs = len(X[X[self.output == 0]])
-        self.nb_uncensored_obs = len(X[X[self.output > 0]])
+        self.nb_censored_obs = len(X[X[self.output] == 0])
+        self.nb_uncensored_obs = len(X[X[self.output] > 0])
 
         self.variables = [x for x in X.columns if x != self.output]
-        
+
         beta_init = [0 for _ in range(len(self.variables))] + [1]   
         self.beta_est = np.zeros((nb_iter,len(beta_init)))
         self.beta_est[0] = beta_init
 
-        X = X.groupby(level=0)
-
-        self.init_ll = self.__log_likelihood(X, beta_init)
+        self.init_ll = self.__log_likelihood(X, beta_init[:-1], beta_init[-1])
 
         if verbose:
             print('Initial log-likelihood : '+ str(self.init_ll))
@@ -215,7 +215,7 @@ class TobitModel(CensoredBaseModel):
 
 
         self.beta = self.beta_est[j-2,:-1]
-        self.sigma = 
+        self.sigma = self.beta_est[j-2,-1]
         self.beta_est = self.beta_est[:j-1,:]
 
         sqrt_vec = np.vectorize(sqrt)
