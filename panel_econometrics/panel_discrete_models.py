@@ -30,7 +30,7 @@ class FixedEffectPanelModel(PanelBaseModel):
         self.final_ll = None
         self.converged = None
 
-    def __response_function(self, X, beta):
+    def response_function(self, X, beta):
         A = X.copy()
         try:
             A.drop(self.output, axis=1, inplace=True)
@@ -47,7 +47,7 @@ class FixedEffectPanelModel(PanelBaseModel):
         X.reset_index(drop=True,inplace=True)
         y.reset_index(drop=True,inplace=True)
 
-        Z = np.array(self.__response_function(X, beta))
+        Z = np.array(self.response_function(X, beta))
 
         if nCr(len(y),sum(y)) <= 100:
             perms = unique_permutations(y)
@@ -268,7 +268,7 @@ class RandomEffectsPanelModel(PanelBaseModel):
         self.final_ll = None
         self.converged = None
 
-    def __response_function(self, X, beta, mu):
+    def response_function(self, X, beta, mu):
         A = X.copy()
         try:
             A.drop(self.output, axis=1, inplace=True)
