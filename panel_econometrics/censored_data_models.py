@@ -14,10 +14,26 @@ from panel_econometrics.utils import inverse_mills_ratio, derivate_inverse_mills
 
 
 class TobitModel(CensoredBaseModel):
+    '''Fixed Effects Logit model for Panel Data
+    Estimation of parameters with the Conditional Maximum Likelihood method
+    '''
     def __init__(self):
         self.name = 'Tobit I Model'
+        self.output = None
+        self.variables = None
+        self.nb_obs = None
+        self.nb_censored_obs = None
+        self.nb_uncensored_obs = None
+        self.init_ll = None
+        self.beta = None
+        self.sigma = None
+        self.beta_est = None
+        self.beta_se = None
+        self.confidence_interval = None
+        self.final_ll = None
+        self.converged = None
 
-    def __response_function(self, X, beta):
+    def response_function(self, X, beta):
         A = X.copy()
         try:
             A.drop(self.output, axis=1, inplace=True)
@@ -31,7 +47,7 @@ class TobitModel(CensoredBaseModel):
         return Z.rename('response')
         
     def __log_likelihood_censored(self, X, beta, sigma):
-        Z = np.array(self.__response_function(X, beta))
+        Z = np.array(self.response_function(X, beta))
         Z = Z/sigma
 
         norm_cdf_vec = np.vectorize(st.norm.cdf)
@@ -40,7 +56,7 @@ class TobitModel(CensoredBaseModel):
         return result
             
     def __log_likelihood_uncensored(self, X, beta, sigma):
-        Z = np.array(self.__response_function(X, beta))
+        Z = np.array(self.response_function(X, beta))
         y = np.array(X[self.output])
         Z = 0.5 * np.multiply((y - Z)/sigma, (y - Z)/sigma)
         result = np.sum(Z)
@@ -66,12 +82,11 @@ class TobitModel(CensoredBaseModel):
 
         inverse_mills_ratio_vec = np.vectorize(inverse_mills_ratio)
 
-        grad_cens = inverse_mills_ratio_vec(np.array(self.__response_function(X_cens, b), ndmin=2))
-        print(X_cens.T, grad_cens)
-        grad_cens = - np.sum(X_cens * grad_cens)
-
-        grad_uncens = s * np.array(y_uncens) - np.array(self.__response_function(X_uncens, b), ndmin=2)
-        grad_uncens = np.sum(np.multiply(X_uncens, grad_uncens))
+        grad_cens = inverse_mills_ratio_vec(np.array(self.response_function(X_cens, b), ndmin=2))
+        grad_cens = - np.sum(np.array(X_cens) * grad_cens.T, axis=0)
+        
+        grad_uncens = s * np.array(y_uncens, ndmin=2) - np.array(self.response_function(X_uncens, b), ndmin=2)
+        grad_uncens = np.sum(np.array(X_uncens) * grad_uncens.T, axis=0)
 
         result = grad_cens + grad_uncens
         return result
@@ -83,7 +98,7 @@ class TobitModel(CensoredBaseModel):
 
         inverse_mills_ratio_vec = np.vectorize(inverse_mills_ratio)
 
-        grad_uncens = s * np.array(y_uncens) - np.array(self.__response_function(X_uncens, b))
+        grad_uncens = s * np.array(y_uncens) - np.array(self.response_function(X_uncens, b))
         grad_uncens = - np.sum(np.multiply(y_uncens, grad_uncens))
 
         result = grad_uncens + len(X_uncens)/s
@@ -91,7 +106,7 @@ class TobitModel(CensoredBaseModel):
 
     def __score(self, X, b, s):
         return np.concatenate([self.__grad_b_log_likelihood(X, b, s),
-            self.__derivate_s_log_likelihood(X, b, s)])
+            np.array(self.__derivate_s_log_likelihood(X, b, s), ndmin=1)])
             
     def __hessian_b_b(self, X, b, s):
         X_uncens = X[X[self.output]>0]
@@ -99,11 +114,11 @@ class TobitModel(CensoredBaseModel):
         X_uncens.drop(self.output, axis=1, inplace=True)
 
         derivate_inverse_mills_ratio_vec = np.vectorize(derivate_inverse_mills_ratio)
-        hessian_uncens = 1 + derivate_inverse_mills_ratio_vec(-np.array(self.__response_function(X_uncens, b), ndmin=2))
+        hessian_uncens = 1 + derivate_inverse_mills_ratio_vec(-np.array(self.response_function(X_uncens, b), ndmin=2))
 
         list_XXT = []
         for i in range(X_uncens.shape[0]):
-            row = np.array(X_uncens[i,:], ndmin=2)
+            row = np.array(np.array(X_uncens)[i,:], ndmin=2)
             list_XXT.append(row.T.dot(row))
         hessian_uncens = [-hessian_uncens[0,i]*list_XXT[i] for i in range(len(list_XXT))]
         
@@ -123,11 +138,12 @@ class TobitModel(CensoredBaseModel):
     def __hessian_b_s(self, X, b, s):
         X_uncens = X[X[self.output]>0]
         y_uncens = X_uncens[self.output]
+        X_uncens.drop(self.output, axis=1, inplace=True)
 
-        result = np.sum(X * np.array(y_uncens, ndmin=2).T, axis=0)
+        result = np.sum(np.array(X_uncens) * np.array(y_uncens, ndmin=2).T, axis=0)
         return result
     
-    def __hessian(self, X, beta):
+    def __hessian(self, X, b, s):
         a = self.__hessian_b_b(X, b, s)
         b = self.__hessian_b_s(X, b, s)
         c = self.__hessian_s_s(X, b, s)
@@ -167,8 +183,10 @@ class TobitModel(CensoredBaseModel):
             If set to True, allows prints of Newton-Raphson algorithm's progress
         '''
         self.output = output
-        X = self.input_data_preparation(X.copy(), self.output, drop_na, fill_value)
+        X = self.input_data_preparation(X.copy(), drop_na, fill_value)
+        X.insert(0, '_cons', 1)
 
+        self.nb_obs = len(X)
         self.nb_censored_obs = len(X[X[self.output] == 0])
         self.nb_uncensored_obs = len(X[X[self.output] > 0])
 
@@ -201,31 +219,37 @@ class TobitModel(CensoredBaseModel):
                 raise ValueError('Improper classification problem' \
                     + ', should be 2 different labels')
 
-            b += step[:-1]
-            s += step[-1]
-            self.beta_est[j] = np.concatenate([b, np.array(1/s, ndmin=2)])
-
+            b -= step[:-1]
+            s -= step[-1]
+            self.beta_est[j] = np.concatenate([b, np.array(1/s, ndmin=1)])
+            
             prev_ll = current_ll
-            current_ll = self.__log_likelihood(X, self.beta_est[j,:-1],
-                self.beta_est[j,-1])
-            if verbose:              
-                print('Iteration %s, log_likelihood : %s'\
-                    % (j, current_ll))
+            if self.beta_est[j,-1] > 0:
+                current_ll = self.__log_likelihood(X, self.beta_est[j,:-1],
+                    self.beta_est[j,-1])
+                if verbose:              
+                    print('Iteration %s, log_likelihood : %s'\
+                        % (j, current_ll))
+            else:
+                current_ll = prev_ll - 1
             j += 1
 
-
-        self.beta = self.beta_est[j-2,:-1]
-        self.sigma = self.beta_est[j-2,-1]
-        self.beta_est = self.beta_est[:j-1,:]
+        self.beta = self.beta_est[j-3,:-1]
+        self.sigma = self.beta_est[j-3,-1]
+        self.beta_est = self.beta_est[:j-2,:]
 
         sqrt_vec = np.vectorize(sqrt)
-        hessian = self.__hessian(X, self.beta_est[j-2])
-        self.beta_se = sqrt_vec(inv(hessian).diagonal())
+        b = self.beta/self.sigma
+        s = 1/self.sigma
+        hessian = self.__hessian(X, b, s)
+        self.beta_se = sqrt_vec(-inv(hessian).diagonal())
 
         self.confidence_interval = np.array(
                 [[self.beta[i] - st.norm.ppf(0.975) * self.beta_se[i],
                     self.beta[i] + st.norm.ppf(0.975) * self.beta_se[i]]
-                    for i in range(len(self.beta))])
+                    for i in range(len(self.beta))]
+                + [[self.sigma - st.norm.ppf(0.975) * self.beta_se[-1],
+                      self.sigma + st.norm.ppf(0.975) * self.beta_se[-1]]])
 
         self.final_ll = prev_ll
 
