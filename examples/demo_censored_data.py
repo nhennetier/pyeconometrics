@@ -4,7 +4,8 @@ import pandas as pd
 
 from panel_econometrics.censored_data_models import TobitModel
 from sklearn.cross_validation import train_test_split
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import mean_squared_error
+from math import sqrt
 
 filepath = os.path.dirname(os.path.abspath(__file__))
     
@@ -19,4 +20,4 @@ TM.fit(train, 'hinctnta', verbose=True)
 TM.summary()
 
 y_pred = TM.predict(test[['male', 'agea', 'wrkac6m']])
-print('Tobit I Model, accuracy score: %s' % accuracy_score(test['hinctnta'], y_pred))
+print('Tobit I Model, RMSE: %.3f' % sqrt(mean_squared_error(test['hinctnta'], y_pred)))
