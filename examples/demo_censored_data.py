@@ -18,5 +18,5 @@ TM = TobitModel()
 TM.fit(train, 'hinctnta', verbose=True)
 TM.summary()
 
-y_pred = TM.predict(test[['male', 'agea', 'pdjobev', 'wrkac6m']])
+y_pred = TM.predict(test[['male', 'agea', 'wrkac6m']])
 print('Tobit I Model, accuracy score: %s' % accuracy_score(test['hinctnta'], y_pred))
