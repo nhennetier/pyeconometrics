@@ -3,6 +3,6 @@
 
 /build
 /dist
-/panel_econometrics.egg-info
+/pyeconometrics.egg-info
 
 test.sh

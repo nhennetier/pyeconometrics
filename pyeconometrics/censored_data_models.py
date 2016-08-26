@@ -8,8 +8,8 @@ warnings.filterwarnings('ignore')
 from numpy.linalg import inv
 from math import exp, sqrt, log, pi
 
-from panel_econometrics.base import CensoredBaseModel
-from panel_econometrics.utils import inverse_mills_ratio, derivate_inverse_mills_ratio
+from pyeconometrics.base import CensoredBaseModel
+from pyeconometrics.utils import inverse_mills_ratio, derivate_inverse_mills_ratio
 
 
 

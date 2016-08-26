@@ -2,7 +2,7 @@
 import os
 import pandas as pd
 
-from panel_econometrics.panel_discrete_models import FixedEffectPanelModel, RandomEffectsPanelModel
+from pyeconometrics.panel_discrete_models import FixedEffectPanelModel, RandomEffectsPanelModel
 from sklearn.cross_validation import train_test_split
 from sklearn.metrics import accuracy_score
 

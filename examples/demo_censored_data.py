@@ -2,7 +2,7 @@
 import os
 import pandas as pd
 
-from panel_econometrics.censored_data_models import TobitModel
+from pyeconometrics.censored_data_models import TobitModel
 from sklearn.cross_validation import train_test_split
 from sklearn.metrics import mean_squared_error
 from math import sqrt

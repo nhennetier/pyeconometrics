@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings('ignore')
 
-from panel_econometrics.utils import norm_cdf
+from pyeconometrics.utils import norm_cdf
 
 
 

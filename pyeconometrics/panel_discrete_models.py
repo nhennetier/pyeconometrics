@@ -9,8 +9,8 @@ warnings.filterwarnings('ignore')
 from numpy.linalg import inv
 from math import exp, sqrt, log
 
-from panel_econometrics.base import PanelBaseModel
-from panel_econometrics.utils import nCr, unique_permutations
+from pyeconometrics.base import PanelBaseModel
+from pyeconometrics.utils import nCr, unique_permutations
 
 
 class FixedEffectPanelModel(PanelBaseModel):

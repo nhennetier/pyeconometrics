@@ -1,0 +1,38 @@
+Metadata-Version: 1.1
+Name: panel-econometrics
+Version: 1.0.1
+Summary: Econometrics for Panel Data
+Home-page: UNKNOWN
+Author: Nicolas HENNETIER
+Author-email: nicolashennetier2@gmail.com
+License: UNKNOWN
+Description: Econometrics for Panel Data
+        ===========================
+        Python package to build econometrics models with panel data, using statsmodels output style.
+        
+        Available models
+        ----------------
+        
+        - Fixed Effects Logistic Regression (Logit)
+        - Random Effects Logistic Regression (Logit and Probit)
+        
+        
+        Installing from Source
+        ----------------------
+        
+        Download and extract the source distribution from Github
+        
+            https://github.com/nicolashennetier/pyeconometrics
+        
+        Or clone the bleeding edge code from our repository on github at
+        
+            git clone git://github.com/nicolashennetier/pyeconometrics.git
+        
+        In the pyeconometrics directory do (with proper permissions)
+        
+            python setup.py install
+Platform: UNKNOWN
+Requires: numpy
+Requires: pandas
+Requires: scipy
+Requires: matplotlib
