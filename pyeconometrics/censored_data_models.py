@@ -39,12 +39,8 @@ class TobitModel(CensoredBaseModel):
             A.drop(self.output, axis=1, inplace=True)
         except:
             pass
-        
-        Z = 0
-        for i,var in enumerate(self.variables):
-            Z += beta[i] * A[var]
 
-        return Z.rename('response')
+        return np.array(A).dot(beta)
         
     def __log_likelihood_censored(self, X, beta, sigma):
         Z = np.array(self.response_function(X, beta))

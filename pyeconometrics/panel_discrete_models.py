@@ -37,11 +37,7 @@ class FixedEffectPanelModel(PanelBaseModel):
         except:
             pass
         
-        Z = 0
-        for i,var in enumerate(self.variables):
-            Z += beta[i] * A[var]
-
-        return Z.rename('response')
+        return np.array(A).dot(beta)
         
     def __log_likelihood_obs(self, X, y, beta):
         X.reset_index(drop=True,inplace=True)
