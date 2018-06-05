@@ -124,7 +124,7 @@ class BaseModel(Results):
         result = (np.sign(Z)+1)/2
 
         try:
-            result = result.astype(int).rename('predicted_label')
+            result = result.astype(int)
         except:
             raise ValueError('One or several data are missing.')
 
